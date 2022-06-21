@@ -1,0 +1,32 @@
+[package]
+name = "chimes-auth"
+version = "0.1.0"
+edition = "2021"
+description = "A middleware of actix-web for handling the authentication for each request"
+readme = "Readme.md"
+authors = ["longzou <longzou@hotmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/longzou/chimes-auth"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-rt = "2.7.0"
+actix-utils = "3.0.0"
+actix-web = "4.0.1"
+chrono = "0.4.19"
+futures = "0.3.21"
+futures-core = "0.3.1"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+serde_json = "1.0.79"
+
+[dependencies.actix-session]
+version = "0.6.2"
+optional = true
+
+[features]
+default = []
+session = ["actix-session"]
+
+
