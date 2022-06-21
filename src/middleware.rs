@@ -74,7 +74,7 @@ impl<S, B, T, P> Transform<S, ServiceRequest> for ChimesAuthorization<T, P>
         S::Future: 'static,
         B: MessageBody + 'static,
         T: Sized + ChimesAuthUser<T> + DeserializeOwned,
-        P: ChimesAuthService<T> + 'static,
+        P: Sized + ChimesAuthService<T>  + 'static,
 {
     type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
