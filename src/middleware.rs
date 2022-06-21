@@ -1,15 +1,13 @@
 use std::cell::RefCell;
-use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll};
 use actix_web::{Error, error};
-use actix_web::body::{MessageBody, EitherBody, BoxBody};
+use actix_web::body::{MessageBody, EitherBody};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderValue};
-use futures::{Future, FutureExt};
 use futures_core::future::{LocalBoxFuture};
 use serde::de::DeserializeOwned;
-use actix_utils::future::{ok, Ready};
+
 #[cfg(target_feature="session")]
 use actix_session::{Session, SessionExt, {storage::SessionStore}};
 
@@ -165,7 +163,7 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
 
                 let permitted = auth.permit(&ust, &req_method, &url_pattern).await;
 
-                if permitted {
+                if permitted.is_some() {
                     let res = service.call(req).await?;
                     Ok(res.map_into_left_body())
                 } else {

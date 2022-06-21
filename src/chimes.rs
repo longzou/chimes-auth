@@ -1,5 +1,5 @@
 
-use std::{iter::Map, process::Output, task::Poll};
+use std::{iter::Map};
 use futures::Future;
 use serde::de::DeserializeOwned;
 
@@ -35,47 +35,28 @@ pub trait ChimesResource<T>
        */
       fn to_detail(&self) -> &T;
   }
-
-  pub struct  ChimesAuthServerFuture<B> 
-  where
-    B: Clone
-  {
-    result: B   
-  }
-
-
-impl<B> Future for ChimesAuthServerFuture<B>
-where
-    B: Clone
-{
-    type Output = B;
-
-    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-        Poll::Ready(self.result.clone())
-    }
-
-}
   
   pub trait ChimesAuthService<T>
   where
       T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned
   {
+    type Future: Future<Output = Option<T>>;
       /**
        * 检查用户是否能够通过指定的URL
        * 根据系统的配置来确定是否能够通过这个URL请求
        * 1. ust为None值
-       *  此时根据req_method和url_pattern查询到该url为bypass=anonymous的模式，则返回true
-       *  此时根据req_method和url_pattern查询到该url为bypass=user的模式，则返回false
-       *  此时根据req_method和url_pattern查询到该url为bypass=permit的模式，则返回false
+       *  此时根据req_method和url_pattern查询到该url为bypass=anonymous的模式，则返回Some(Default)
+       *  此时根据req_method和url_pattern查询到该url为bypass=user的模式，则返回None
+       *  此时根据req_method和url_pattern查询到该url为bypass=permit的模式，则返回None
        * 2. ust为Some值
        *  此时根据req_method和url_pattern查询到该url为bypass=anonymous的模式，则返回true
        *  此时根据req_method和url_pattern查询到该url为bypass=user的模式，则返回true
        *  此时根据req_method和url_pattern查询到该url为bypass=permit的模式，则:
-       *      a. 用户拥有可以访问该权限的角色：返回true
-       *      b. 用户拥有可以访问该权限的资源: 返回true
-       *      c. 用户不满足a和b，则返回false
+       *      a. 用户拥有可以访问该权限的角色：返回Some(T)
+       *      b. 用户拥有可以访问该权限的资源: 返回Some(T)
+       *      c. 用户不满足a和b，则返回None
        */
-      fn permit(&self, ust: &Option<T>, req_method: &String, url_pattern: &String) -> ChimesAuthServerFuture<bool>;
+      fn permit(&self, ust: &Option<T>, req_method: &String, url_pattern: &String) -> Self::Future;
   
   
       /**
@@ -86,7 +67,7 @@ where
        * 3. 再通过用户信息去查询用户详细信息
        * 4. 返回None表示该token已失效，返回Some表示该Token有效，且可以找到对应的帐户信息
        */
-      fn authenticate(&self, token: &String) -> ChimesAuthServerFuture<Option<T>>;
+      fn authenticate(&self, token: &String) -> Self::Future;
 
   
 }
