@@ -184,8 +184,8 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
                         let err = actix_web::error::ErrorForbidden("Forbidden");
 
                         let errresp = req.error_response(err);
-                        let wbj: web::Json<ApiResult<String>> = web::Json(ApiResult::error(401, &"Forbidden".to_string()));
-                        let hrp = HttpResponse::Unauthorized().json(wbj).map_into_boxed_body();
+                        let wbj: web::Json<ApiResult<String>> = web::Json(ApiResult::error(403, &"Forbidden".to_string()));
+                        let hrp = HttpResponse::Forbidden().json(wbj).map_into_boxed_body();
                         
                         let m = ServiceResponse::new(
                             errresp.request().clone(),
