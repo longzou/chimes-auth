@@ -1,5 +1,6 @@
 
-use std::iter::Map;
+use std::{iter::Map, process::Output, task::Poll};
+use futures::Future;
 use serde::de::DeserializeOwned;
 
 pub trait ChimesResource<T> 
@@ -34,10 +35,30 @@ pub trait ChimesResource<T>
        */
       fn to_detail(&self) -> &T;
   }
+
+  pub struct  ChimesAuthServerFuture<B> 
+  where
+    B: Clone
+  {
+    result: B   
+  }
+
+
+impl<B> Future for ChimesAuthServerFuture<B>
+where
+    B: Clone
+{
+    type Output = B;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        Poll::Ready(self.result.clone())
+    }
+
+}
   
   pub trait ChimesAuthService<T>
   where
-      T: Sized + ChimesAuthUser<T> + DeserializeOwned
+      T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned
   {
       /**
        * 检查用户是否能够通过指定的URL
@@ -54,7 +75,7 @@ pub trait ChimesResource<T>
        *      b. 用户拥有可以访问该权限的资源: 返回true
        *      c. 用户不满足a和b，则返回false
        */
-      fn permit(&self, ust: &Option<T>, req_method: &String, url_pattern: &String) -> bool;
+      fn permit(&self, ust: &Option<T>, req_method: &String, url_pattern: &String) -> ChimesAuthServerFuture<bool>;
   
   
       /**
@@ -65,7 +86,8 @@ pub trait ChimesResource<T>
        * 3. 再通过用户信息去查询用户详细信息
        * 4. 返回None表示该token已失效，返回Some表示该Token有效，且可以找到对应的帐户信息
        */
-      fn authenticate(&self, token: &String) -> Option<T>;
+      fn authenticate(&self, token: &String) -> ChimesAuthServerFuture<Option<T>>;
+
   
 }
 

@@ -20,7 +20,7 @@ use crate::ChimesAuthService;
 // The custom ChimesAuthorization for auth
 pub struct ChimesAuthorization<T, P> 
 where
-    T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+    T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned,
     P: ChimesAuthService<T>
 {
     #[allow(unused)]
@@ -34,7 +34,7 @@ where
 
 impl <T, P> ChimesAuthorization<T, P> 
 where
-    T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+    T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned,
     P: ChimesAuthService<T>
 {
     pub fn new(auth_service: P) -> Self {
@@ -74,7 +74,7 @@ impl<S, B, T, P> Transform<S, ServiceRequest> for ChimesAuthorization<T, P>
         S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
-        T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+        T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned,
         P: Sized + ChimesAuthService<T>  + 'static,
 {
     type Response = ServiceResponse<EitherBody<B>>;
@@ -112,7 +112,7 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
         S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
-        T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+        T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned,
         P: Sized + ChimesAuthService<T>  + 'static,
 {
     // type Response = ServiceResponse<B>;
@@ -152,7 +152,8 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
                 #[cfg(not(target_feature= "session"))]
                 let ust = match token.to_str() {
                     Ok(st) => {
-                        auth.authenticate(&st.to_string())
+                        let us = auth.authenticate(&st.to_string()).await;
+                        us
                     }
                     Err(_) => {
                         None
@@ -162,7 +163,9 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
                 #[cfg(target_feature= "session")]
                 let ust = auth_user;
 
-                if auth.permit(&ust, &req_method, &url_pattern) {
+                let permitted = auth.permit(&ust, &req_method, &url_pattern).await;
+
+                if permitted {
                     let res = service.call(req).await?;
                     Ok(res.map_into_left_body())
                 } else {
