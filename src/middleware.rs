@@ -18,23 +18,28 @@ use crate::ChimesAuthUser;
 use crate::ChimesAuthService;
 
 // The custom ChimesAuthorization for auth
-pub struct ChimesAuthorization<T> 
+pub struct ChimesAuthorization<T, P> 
 where
-    T: Sized + ChimesAuthService<T> + ChimesAuthUser<T> + DeserializeOwned
+    T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+    P: ChimesAuthService<T>
 {
-    auth_service: Rc<T>,
+    #[allow(unused)]
+    auth_info: Option<T>,
+    auth_service: Rc<P>,
     allow_urls: Rc<Vec<String>>,
     header_key: Option<String>,
     #[cfg(target_feature="session")]
     session_key: Option<String>,
 }
 
-impl <T> ChimesAuthorization<T> 
+impl <T, P> ChimesAuthorization<T, P> 
 where
-    T: Sized + ChimesAuthService<T> + ChimesAuthUser<T> + DeserializeOwned,
+    T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+    P: ChimesAuthService<T>
 {
-    pub fn new(auth_service: T) -> Self {
+    pub fn new(auth_service: P) -> Self {
         Self{
+            auth_info: None,
             auth_service: Rc::new(auth_service),
             allow_urls: Rc::new(vec![]),
             header_key: None,
@@ -63,21 +68,23 @@ where
     }
 }
 
-impl<S, B, T> Transform<S, ServiceRequest> for ChimesAuthorization<T>
+impl<S, B, T, P> Transform<S, ServiceRequest> for ChimesAuthorization<T, P>
     where
         S: Service<ServiceRequest, Response=ServiceResponse<EitherBody<B>>, Error=Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
-        T: Sized + ChimesAuthService<T> + ChimesAuthUser<T> + DeserializeOwned + 'static,
+        T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+        P: ChimesAuthService<T> + 'static,
 {
     type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
-    type Transform = ChimesAuthenticationMiddleware<S, T>;
+    type Transform = ChimesAuthenticationMiddleware<S, T, P>;
     type InitError = ();
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
         ok(ChimesAuthenticationMiddleware {
+            auth_info: None,
             service: Rc::new(RefCell::new(service)),
             auth_service: self.auth_service.clone(),
             allow_urls: self.allow_urls.clone(),
@@ -88,21 +95,24 @@ impl<S, B, T> Transform<S, ServiceRequest> for ChimesAuthorization<T>
     }
 }
 
-pub struct ChimesAuthenticationMiddleware<S, T> {
+pub struct ChimesAuthenticationMiddleware<S, T, P> {
+    #[allow(unused)]
+    auth_info: Option<T>,
     service: Rc<RefCell<S>>,
-    auth_service: Rc<T>,
+    auth_service: Rc<P>,
     allow_urls: Rc<Vec<String>>,
     header_key: Option<String>,
     #[cfg(target_feature="session")]
-    session_key: Option<String>,    
+    session_key: Option<String>,
 }
 
-impl<S, T, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T>
+impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T, P>
     where
         S: Service<ServiceRequest, Response = ServiceResponse<EitherBody<B>>, Error = Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
-        T: Sized + ChimesAuthService<T> + ChimesAuthUser<T> + DeserializeOwned + 'static,
+        T: Sized + ChimesAuthUser<T> + DeserializeOwned,
+        P: Sized + ChimesAuthService<T>  + 'static,
 {
     // type Response = ServiceResponse<B>;
     type Response = ServiceResponse<EitherBody<B>>;
@@ -110,7 +120,7 @@ impl<S, T, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T>
     type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
     // type Future = LocalBoxFuture<'static, Result<ServiceResponse<EitherBody<B>>, Error>>;
 
-    fn poll_ready(self: &ChimesAuthenticationMiddleware<S, T>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(self: &ChimesAuthenticationMiddleware<S, T, P>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.poll_ready(cx)
     }
 
