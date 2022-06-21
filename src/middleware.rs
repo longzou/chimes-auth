@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::task::{Context, Poll};
-use actix_web::{Error, error};
+use actix_web::{Error, error, HttpResponse, web};
 use actix_web::body::{MessageBody, EitherBody};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderValue};
@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 use actix_session::{Session, SessionExt, {storage::SessionStore}};
 
 
-use crate::ChimesAuthUser;
+use crate::{ChimesAuthUser, ApiResult};
 use crate::ChimesAuthService;
 
 // The custom ChimesAuthorization for auth
@@ -167,8 +167,32 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
                     let res = service.call(req).await?;
                     Ok(res.map_into_left_body())
                 } else {
-                    let res = req.error_response(error::ErrorUnauthorized("err"));
-                    Ok(res.map_into_right_body())
+                    if ust.is_none() {
+                        
+                        let err = actix_web::error::ErrorUnauthorized("Not-Authorized");
+
+                        let errresp = req.error_response(err);
+                        let wbj: web::Json<ApiResult<String>> = web::Json(ApiResult::error(401, &"Not-Authorized".to_string()));
+                        let hrp = HttpResponse::Unauthorized().json(wbj).map_into_boxed_body();
+                        
+                        let m = ServiceResponse::new(
+                            errresp.request().clone(),
+                            hrp,
+                        );
+                        Ok(m.map_into_right_body())
+                    } else {
+                        let err = actix_web::error::ErrorForbidden("Forbidden");
+
+                        let errresp = req.error_response(err);
+                        let wbj: web::Json<ApiResult<String>> = web::Json(ApiResult::error(401, &"Forbidden".to_string()));
+                        let hrp = HttpResponse::Unauthorized().json(wbj).map_into_boxed_body();
+                        
+                        let m = ServiceResponse::new(
+                            errresp.request().clone(),
+                            hrp,
+                        );
+                        Ok(m.map_into_right_body())
+                    }
                 }
             }
         })
