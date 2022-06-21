@@ -3,13 +3,13 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll};
 use actix_web::{Error, error};
-use actix_web::body::{MessageBody, EitherBody};
+use actix_web::body::{MessageBody, EitherBody, BoxBody};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderValue};
-use futures::Future;
-use futures::future::{ok, Ready};
+use futures::{Future, FutureExt};
+use futures_core::future::{LocalBoxFuture};
 use serde::de::DeserializeOwned;
-
+use actix_utils::future::{ok, Ready};
 #[cfg(target_feature="session")]
 use actix_session::{Session, SessionExt, {storage::SessionStore}};
 
@@ -48,7 +48,7 @@ where
         }
     }
 
-    pub fn allow(&mut self, url: &String) -> &mut Self {
+    pub fn allow(mut self, url: &String) -> Self {
         Rc::get_mut(&mut self.allow_urls)
                 .unwrap()
                 .push(url.to_string());
@@ -56,21 +56,22 @@ where
         self
     }
 
-    pub fn header_key(&mut self, new_key: &String) -> &mut Self {
+    pub fn header_key(mut self, new_key: &String) -> Self {
         self.header_key = Some(new_key.to_string());
         self
     }
 
     #[cfg(target_feature="session")]
-    pub fn session_key(&mut self, new_key: &String) -> &mut Self {
+    pub fn session_key(mut self, new_key: &String) -> Self {
         self.session_key = Some(new_key.to_string());
         self
     }
+
 }
 
 impl<S, B, T, P> Transform<S, ServiceRequest> for ChimesAuthorization<T, P>
     where
-        S: Service<ServiceRequest, Response=ServiceResponse<EitherBody<B>>, Error=Error> + 'static,
+        S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
         T: Sized + ChimesAuthUser<T> + DeserializeOwned,
@@ -78,12 +79,12 @@ impl<S, B, T, P> Transform<S, ServiceRequest> for ChimesAuthorization<T, P>
 {
     type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
-    type Transform = ChimesAuthenticationMiddleware<S, T, P>;
     type InitError = ();
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+    type Transform = ChimesAuthenticationMiddleware<S, T, P>;
+    type Future = actix_utils::future::Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ok(ChimesAuthenticationMiddleware {
+        actix_utils::future::ok(ChimesAuthenticationMiddleware {
             auth_info: None,
             service: Rc::new(RefCell::new(service)),
             auth_service: self.auth_service.clone(),
@@ -108,7 +109,7 @@ pub struct ChimesAuthenticationMiddleware<S, T, P> {
 
 impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T, P>
     where
-        S: Service<ServiceRequest, Response = ServiceResponse<EitherBody<B>>, Error = Error> + 'static,
+        S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
         T: Sized + ChimesAuthUser<T> + DeserializeOwned,
@@ -117,8 +118,8 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
     // type Response = ServiceResponse<B>;
     type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
-    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
-    // type Future = LocalBoxFuture<'static, Result<ServiceResponse<EitherBody<B>>, Error>>;
+    // type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
+    type Future = LocalBoxFuture<'static, Result<ServiceResponse<EitherBody<B>>, Error>>;
 
     fn poll_ready(self: &ChimesAuthenticationMiddleware<S, T, P>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.poll_ready(cx)
@@ -139,14 +140,14 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
         
 
         let header_key = self.header_key.clone().unwrap_or("Authentication".to_string());
-
+        
         Box::pin(async move {
             let value = HeaderValue::from_str("").unwrap();
             let token = req.headers().get(header_key.as_str()).unwrap_or(&value);
             let req_method = req.method().to_string();
             
             if passed_url {
-                Ok(service.call(req).await?)
+                Ok(service.call(req).await?.map_into_left_body())
             } else {
                 #[cfg(not(target_feature= "session"))]
                 let ust = match token.to_str() {
@@ -162,7 +163,8 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
                 let ust = auth_user;
 
                 if auth.permit(&ust, &req_method, &url_pattern) {
-                    Ok(service.call(req).await?)
+                    let res = service.call(req).await?;
+                    Ok(res.map_into_left_body())
                 } else {
                     let res = req.error_response(error::ErrorUnauthorized("err"));
                     Ok(res.map_into_right_body())
