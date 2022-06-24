@@ -33,7 +33,7 @@ pub trait ChimesResource<T>
       /**
        * 转换到T，这个用户的真实信息
        */
-      fn to_detail(&self) -> &T;
+      fn to_detail(self) -> T;
   }
   
   pub trait ChimesAuthService<T>
