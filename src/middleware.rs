@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::task::{Context, Poll};
-use actix_web::{Error, error, HttpResponse, web};
+use actix_web::{Error, error, HttpResponse, web, HttpMessage};
 use actix_web::body::{MessageBody, EitherBody};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::{HeaderValue};
@@ -72,7 +72,7 @@ impl<S, B, T, P> Transform<S, ServiceRequest> for ChimesAuthorization<T, P>
         S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
-        T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned,
+        T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned + 'static,
         P: Sized + ChimesAuthService<T>  + 'static,
 {
     type Response = ServiceResponse<EitherBody<B>>;
@@ -110,7 +110,7 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
         S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
         S::Future: 'static,
         B: MessageBody + 'static,
-        T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned,
+        T: Clone + Sized + ChimesAuthUser<T> + DeserializeOwned + 'static,
         P: Sized + ChimesAuthService<T>  + 'static,
 {
     // type Response = ServiceResponse<B>;
@@ -164,6 +164,9 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
                 let permitted = auth.permit(&ust, &req_method, &url_pattern).await;
 
                 if permitted.is_some() {
+                    if ust.is_some() {
+                        req.extensions_mut().insert(web::Data::new(ust.unwrap().clone()));
+                    }
                     let res = service.call(req).await?;
                     Ok(res.map_into_left_body())
                 } else {
