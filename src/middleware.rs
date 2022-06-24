@@ -165,7 +165,7 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
 
                 if permitted.is_some() {
                     if ust.is_some() {
-                        req.extensions_mut().insert(web::Data::new(ust.unwrap().clone()));
+                        req.extensions_mut().insert(ust.unwrap().clone());
                     }
                     let res = service.call(req).await?;
                     Ok(res.map_into_left_body())
