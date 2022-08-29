@@ -61,7 +61,7 @@ where
         self
     }
 
-    pub fn nojwt_header_key(&mut self, new_key: &String) -> &mut Self {
+    pub fn nojwt_header_key(mut self, new_key: &String) -> Self {
         self.nojwt_header_key = Some(new_key.to_string());
         self
     }    
