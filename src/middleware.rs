@@ -26,6 +26,7 @@ where
     auth_service: Rc<P>,
     allow_urls: Rc<Vec<String>>,
     header_key: Option<String>,
+    nojwt_header_key: Option<String>,
     #[cfg(target_feature="session")]
     session_key: Option<String>,
 }
@@ -41,6 +42,7 @@ where
             auth_service: Rc::new(auth_service),
             allow_urls: Rc::new(vec![]),
             header_key: None,
+            nojwt_header_key: None,
             #[cfg(target_feature="session")]
             session_key: None,
         }
@@ -58,6 +60,11 @@ where
         self.header_key = Some(new_key.to_string());
         self
     }
+
+    pub fn nojwt_header_key(&mut self, new_key: &String) -> &mut Self {
+        self.nojwt_header_key = Some(new_key.to_string());
+        self
+    }    
 
     #[cfg(target_feature="session")]
     pub fn session_key(mut self, new_key: &String) -> Self {
@@ -88,6 +95,7 @@ impl<S, B, T, P> Transform<S, ServiceRequest> for ChimesAuthorization<T, P>
             auth_service: self.auth_service.clone(),
             allow_urls: self.allow_urls.clone(),
             header_key: self.header_key.clone(),
+            nojwt_header_key: self.nojwt_header_key.clone(),
             #[cfg(target_feature="session")]
             session_key: self.session_key.clone()
         })
@@ -101,6 +109,7 @@ pub struct ChimesAuthenticationMiddleware<S, T, P> {
     auth_service: Rc<P>,
     allow_urls: Rc<Vec<String>>,
     header_key: Option<String>,
+    nojwt_header_key: Option<String>,
     #[cfg(target_feature="session")]
     session_key: Option<String>,
 }
@@ -138,7 +147,8 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
         
 
         let header_key = self.header_key.clone().unwrap_or("Authentication".to_string());
-        
+        let nojwt_header_key = self.nojwt_header_key.clone();
+
         Box::pin(async move {
             let value = HeaderValue::from_str("").unwrap();
             let token = req.headers().get(header_key.as_str()).unwrap_or(&value);
@@ -148,13 +158,26 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
                 Ok(service.call(req).await?.map_into_left_body())
             } else {
                 #[cfg(not(target_feature= "session"))]
-                let ust = match token.to_str() {
-                    Ok(st) => {
-                        let us = auth.authenticate(&st.to_string()).await;
-                        us
+                let ust = if nojwt_header_key.is_some() {
+                    let nojwt_token = req.headers().get(nojwt_header_key.unwrap().as_str()).unwrap_or(&value);
+                    match nojwt_token.to_str() {
+                        Ok(st) => {
+                            let us = auth.nojwt_authenticate(&st.to_string()).await;
+                            us
+                        }
+                        Err(_) => {
+                            None
+                        }
                     }
-                    Err(_) => {
-                        None
+                } else {
+                    match token.to_str() {
+                        Ok(st) => {
+                            let us = auth.authenticate(&st.to_string()).await;
+                            us
+                        }
+                        Err(_) => {
+                            None
+                        }
                     }
                 };
 

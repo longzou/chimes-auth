@@ -70,5 +70,15 @@ pub trait ChimesResource<T>
       fn authenticate(&self, token: &String) -> Self::Future;
 
   
+      /**
+       * 检查Non-JWT Header信息是否为有效的用户信息
+       * 在使用特定的Header作为API请求时，可以使用该Header
+       * 可以做如下处理
+       * 1. token是一个唯一的字符串信息，通过以该token为key，从存储（数据库或Redis或内存）中查询到该Key所代表的用户信息；
+       * 2. token是一个NON-JWT Token，则解析该Token以获得登录的用户名等信息
+       * 3. 再通过用户信息去查询用户详细信息
+       * 4. 返回None表示该token已失效，返回Some表示该Token有效，且可以找到对应的帐户信息
+       */
+      fn nojwt_authenticate(&self, token: &String) -> Option<T>;    
 }
 
