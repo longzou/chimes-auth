@@ -152,15 +152,20 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
         Box::pin(async move {
             let value = HeaderValue::from_str("").unwrap();
             let token = req.headers().get(header_key.as_str()).unwrap_or(&value);
+            let nojwt_token = if nojwt_header_key.is_some() {
+                req.headers().get(nojwt_header_key.as_str())
+            } else {
+                None
+            };
+
             let req_method = req.method().to_string();
             
             if passed_url {
                 Ok(service.call(req).await?.map_into_left_body())
             } else {
                 #[cfg(not(target_feature= "session"))]
-                let ust = if nojwt_header_key.is_some() {
-                    let nojwt_token = req.headers().get(nojwt_header_key.unwrap().as_str()).unwrap_or(&value);
-                    match nojwt_token.to_str() {
+                let ust = if nojwt_token.is_some() {
+                    match nojwt_token.unwrap_or(&value).to_str() {
                         Ok(st) => {
                             let us = auth.nojwt_authenticate(&st.to_string()).await;
                             us
