@@ -153,7 +153,7 @@ impl<S, T, P, B> Service<ServiceRequest> for ChimesAuthenticationMiddleware<S, T
             let value = HeaderValue::from_str("").unwrap();
             let token = req.headers().get(header_key.as_str()).unwrap_or(&value);
             let nojwt_token = if nojwt_header_key.is_some() {
-                req.headers().get(nojwt_header_key.as_str())
+                req.headers().get(nojwt_header_key.unwrap().as_str())
             } else {
                 None
             };
