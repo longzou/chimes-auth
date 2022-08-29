@@ -79,6 +79,6 @@ pub trait ChimesResource<T>
        * 3. 再通过用户信息去查询用户详细信息
        * 4. 返回None表示该token已失效，返回Some表示该Token有效，且可以找到对应的帐户信息
        */
-      fn nojwt_authenticate(&self, token: &String) -> Option<T>;    
+      fn nojwt_authenticate(&self, token: &String) -> Self::Future;    
 }
 
